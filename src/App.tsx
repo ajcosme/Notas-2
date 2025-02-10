@@ -38,34 +38,6 @@ function App() {
     ));
   };
 
-  const handleDragStart = (e: React.DragEvent, id: number) => {
-    const note = notes.find(n => n.id === id);
-    if (!note) return;
-
-    const offsetX = e.clientX - note.position.x;
-    const offsetY = e.clientY - note.position.y;
-    
-    e.dataTransfer.setData('text/plain', JSON.stringify({
-      id,
-      offsetX,
-      offsetY
-    }));
-  };
-
-  const handleDragEnd = (e: React.DragEvent, id: number) => {
-    e.preventDefault();
-    if (e.clientX === 0 && e.clientY === 0) return;
-
-    // Calcula a nova posição considerando o offset
-    const data = JSON.parse(e.dataTransfer.getData('text/plain'));
-    const newX = e.clientX - data.offsetX;
-    const newY = e.clientY - data.offsetY;
-    
-    setNotes(notes.map(note =>
-      note.id === id ? { ...note, position: { x: newX, y: newY } } : note
-    ));
-  };
-
   const handleResize = (id: number, width: number, height: number) => {
     setNotes(notes.map(note =>
       note.id === id ? { ...note, size: { width, height } } : note
@@ -82,12 +54,22 @@ function App() {
     offsetY: 0
   });
 
-  const handleMouseDown = (e: React.MouseEvent, id: number) => {
+  const handleMouseDown = (e: React.MouseEvent | React.TouchEvent, id: number) => {
     const note = notes.find(n => n.id === id);
     if (!note) return;
 
-    const offsetX = e.clientX - note.position.x;
-    const offsetY = e.clientY - note.position.y;
+    let clientX, clientY;
+    if ('touches' in e) {
+      e.preventDefault(); // Previne o scroll da página
+      clientX = e.touches[0].clientX;
+      clientY = e.touches[0].clientY;
+    } else {
+      clientX = (e as React.MouseEvent).clientX;
+      clientY = (e as React.MouseEvent).clientY;
+    }
+
+    const offsetX = clientX - note.position.x;
+    const offsetY = clientY - note.position.y;
     
     setDragInfo({
       noteId: id,
@@ -96,30 +78,43 @@ function App() {
     });
   };
 
-  const handleMouseMove = (e: MouseEvent) => {
+  const handleMove = (e: MouseEvent | TouchEvent) => {
     if (!dragInfo.noteId) return;
 
-    const newX = e.clientX - dragInfo.offsetX;
-    const newY = e.clientY - dragInfo.offsetY;
+    let clientX, clientY;
+    if ('touches' in e) {
+      clientX = e.touches[0].clientX;
+      clientY = e.touches[0].clientY;
+    } else {
+      clientX = (e as MouseEvent).clientX;
+      clientY = (e as MouseEvent).clientY;
+    }
+
+    const newX = clientX - dragInfo.offsetX;
+    const newY = clientY - dragInfo.offsetY;
 
     setNotes(notes.map(note =>
       note.id === dragInfo.noteId ? { ...note, position: { x: newX, y: newY } } : note
     ));
   };
 
-  const handleMouseUp = () => {
+  const handleEnd = () => {
     setDragInfo({ noteId: null, offsetX: 0, offsetY: 0 });
   };
 
   useEffect(() => {
     if (dragInfo.noteId) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
+      document.addEventListener('mousemove', handleMove);
+      document.addEventListener('mouseup', handleEnd);
+      document.addEventListener('touchmove', handleMove);
+      document.addEventListener('touchend', handleEnd);
     }
 
     return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener('mousemove', handleMove);
+      document.removeEventListener('mouseup', handleEnd);
+      document.removeEventListener('touchmove', handleMove);
+      document.removeEventListener('touchend', handleEnd);
     };
   }, [dragInfo, notes]);
 
@@ -141,6 +136,7 @@ function App() {
             height: note.size.height + 'px'
           }}
           onMouseDown={(e) => handleMouseDown(e, note.id)}
+          onTouchStart={(e) => handleMouseDown(e, note.id)}
         >
           <button className="delete-button" onClick={() => deleteNote(note.id)}>×</button>
           <textarea
